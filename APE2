@@ -21,6 +21,8 @@ void setup() {
 
   pinMode(BUTTON_PIN, INPUT); // pull-down externo
 
+  randomSeed(analogRead(A0)); // aleatoriedad
+
   apagarTodos(); // asegurar inicio apagado
 }
 
@@ -62,12 +64,7 @@ void leerBoton() {
 
   // Detecta cuando se PRESIONA (LOW → HIGH)
   if (estadoActual == HIGH && estadoAnterior == LOW) {
-    patronActual++;
-
-    if (patronActual > 4) {
-      patronActual = 0;
-    }
-
+    patronActual = random(0, 5); 
     delay(200); // debounce
   }
 
