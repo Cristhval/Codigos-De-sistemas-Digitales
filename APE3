@@ -1,3 +1,6 @@
+// =========================
+// CONFIGURACIÓN
+// =========================
 const int pin555 = 2;
 const int pinFF  = 3;
 
@@ -5,86 +8,131 @@ const int pinFF  = 3;
 // ESTRUCTURA
 // =========================
 struct Canal {
-int pin;
-int estado;
-unsigned long tAnterior;
-unsigned long tCambio;
-unsigned long tHigh;
-unsigned long tLow;
-const char* nombre;
+  int pin;
+  int estado;
+  unsigned long tCambio;
+  unsigned long tHigh;
+  unsigned long tLow;
+  float frecuencia;
+  float periodo;
+  float duty;
 };
 
-// =========================
-// PROTOTIPOS 
-// =========================
 void procesarCanal(Canal &c, unsigned long tiempoActual);
-void imprimirResultados(const char* nombre, float frecuencia, unsigned long periodo, float duty);
 
 // =========================
 // VARIABLES
 // =========================
-Canal canal555 = {pin555, LOW, 0, 0, 0, 0, "555"};
-Canal canalFF  = {pinFF,  LOW, 0, 0, 0, 0, "FF"};
+Canal canal555 = {pin555, LOW, 0, 0, 0, 0, 0, 0};
+Canal canalFF  = {pinFF,  LOW, 0, 0, 0, 0, 0, 0};
 
+unsigned long ultimaImpresion = 0;
+const unsigned long INTERVALO = 10;
+
+char modo = 'p'; // 'p' = plotter, 'm' = monitor
+
+// =========================
+// SETUP
+// =========================
 void setup() {
-Serial.begin(9600);
-pinMode(pin555, INPUT);
-pinMode(pinFF, INPUT);
+  Serial.begin(9600);
+  pinMode(pin555, INPUT);
+  pinMode(pinFF, INPUT);
+
+  Serial.println("Comandos:");
+  Serial.println("p -> Plotter");
+  Serial.println("m -> Monitor de datos");
 }
 
+// =========================
+// LOOP
+// =========================
 void loop() {
-unsigned long tiempoActual = millis();
+  unsigned long tiempoActual = millis();
 
-procesarCanal(canal555, tiempoActual);
-procesarCanal(canalFF, tiempoActual);
-}
+  procesarCanal(canal555, tiempoActual);
+  procesarCanal(canalFF,  tiempoActual);
 
-// =========================
-// FUNCIONES
-// =========================
+  // =========================
+  // CAMBIO DE MODO POR TECLADO
+  // =========================
+  if (Serial.available()) {
+    char comando = Serial.read();
 
-void procesarCanal(Canal &c, unsigned long tiempoActual) {
-int lectura = digitalRead(c.pin);
+    if (comando == 'p' || comando == 'm') {
+      modo = comando;
+    }
+  }
 
-if (lectura != c.estado) {
+  // =========================
+  // MODO PLOTTER
+  // =========================
+  if (modo == 'p') {
 
+    if (tiempoActual - ultimaImpresion >= INTERVALO) {
+      ultimaImpresion = tiempoActual;
 
-if (lectura == HIGH) {
-  c.tLow = tiempoActual - c.tCambio;
-} else {
-  c.tHigh = tiempoActual - c.tCambio;
-}
+      int val555 = digitalRead(pin555);
+      int valFF  = digitalRead(pinFF);
 
-c.tCambio = tiempoActual;
+      int plotFF  = (valFF  * 50) + 10;
+      int plot555 = (val555 * 50) + 100;
 
-if (lectura == HIGH) {
-  unsigned long periodo = tiempoActual - c.tAnterior;
-  c.tAnterior = tiempoActual;
+      // Mantener escala fija
+      Serial.print(0);
+      Serial.print(",");
+      Serial.print(plotFF);
+      Serial.print(",");
+      Serial.print(plot555);
+      Serial.print(",");
+      Serial.println(200);
+    }
+  }
 
-  if (periodo > 0) {
-    float frecuencia = 1000.0 / periodo;
+  // =========================
+  // MODO MONITOR SERIAL
+  // =========================
+  else if (modo == 'm') {
 
-    if ((c.tHigh + c.tLow) > 0 && c.tHigh > 0) {
-      float duty = (c.tHigh * 100.0) / (c.tHigh + c.tLow);
+    if (tiempoActual - ultimaImpresion >= 1000) {
+      ultimaImpresion = tiempoActual;
 
-      imprimirResultados(c.nombre, frecuencia, periodo, duty);
+      Serial.println("=== CANAL 555 ===");
+      Serial.print("Frecuencia: "); Serial.print(canal555.frecuencia); Serial.println(" Hz");
+      Serial.print("Periodo: "); Serial.print(canal555.periodo); Serial.println(" ms");
+      Serial.print("Duty: "); Serial.print(canal555.duty); Serial.println(" %");
+
+      Serial.println("=== CANAL FF ===");
+      Serial.print("Frecuencia: "); Serial.print(canalFF.frecuencia); Serial.println(" Hz");
+      Serial.print("Periodo: "); Serial.print(canalFF.periodo); Serial.println(" ms");
+      Serial.print("Duty: "); Serial.print(canalFF.duty); Serial.println(" %");
+
+      Serial.println("---------------------------");
     }
   }
 }
 
-c.estado = lectura;
+// =========================
+// PROCESAMIENTO
+// =========================
+void procesarCanal(Canal &c, unsigned long tiempoActual) {
+  int lectura = digitalRead(c.pin);
 
+  if (lectura != c.estado) {
 
-}
-}
+    if (lectura == HIGH)
+      c.tLow = tiempoActual - c.tCambio;
+    else
+      c.tHigh = tiempoActual - c.tCambio;
 
-void imprimirResultados(const char* nombre, float frecuencia, unsigned long periodo, float duty) {
-Serial.print(nombre);
-Serial.print(" -> F: ");
-Serial.print(frecuencia);
-Serial.print(" Hz | T: ");
-Serial.print(periodo);
-Serial.print(" ms | Duty: ");
-Serial.print(duty);
-Serial.println(" %");
+    c.tCambio = tiempoActual;
+
+    if (c.tHigh > 0 && c.tLow > 0) {
+      c.periodo = c.tHigh + c.tLow;
+      c.frecuencia = 1000.0 / c.periodo;
+      c.duty = (c.tHigh * 100.0) / c.periodo;
+    }
+
+    c.estado = lectura;
+  }
 }
