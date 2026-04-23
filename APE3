@@ -1,0 +1,90 @@
+const int pin555 = 2;
+const int pinFF  = 3;
+
+// =========================
+// ESTRUCTURA
+// =========================
+struct Canal {
+int pin;
+int estado;
+unsigned long tAnterior;
+unsigned long tCambio;
+unsigned long tHigh;
+unsigned long tLow;
+const char* nombre;
+};
+
+// =========================
+// PROTOTIPOS 
+// =========================
+void procesarCanal(Canal &c, unsigned long tiempoActual);
+void imprimirResultados(const char* nombre, float frecuencia, unsigned long periodo, float duty);
+
+// =========================
+// VARIABLES
+// =========================
+Canal canal555 = {pin555, LOW, 0, 0, 0, 0, "555"};
+Canal canalFF  = {pinFF,  LOW, 0, 0, 0, 0, "FF"};
+
+void setup() {
+Serial.begin(9600);
+pinMode(pin555, INPUT);
+pinMode(pinFF, INPUT);
+}
+
+void loop() {
+unsigned long tiempoActual = millis();
+
+procesarCanal(canal555, tiempoActual);
+procesarCanal(canalFF, tiempoActual);
+}
+
+// =========================
+// FUNCIONES
+// =========================
+
+void procesarCanal(Canal &c, unsigned long tiempoActual) {
+int lectura = digitalRead(c.pin);
+
+if (lectura != c.estado) {
+
+
+if (lectura == HIGH) {
+  c.tLow = tiempoActual - c.tCambio;
+} else {
+  c.tHigh = tiempoActual - c.tCambio;
+}
+
+c.tCambio = tiempoActual;
+
+if (lectura == HIGH) {
+  unsigned long periodo = tiempoActual - c.tAnterior;
+  c.tAnterior = tiempoActual;
+
+  if (periodo > 0) {
+    float frecuencia = 1000.0 / periodo;
+
+    if ((c.tHigh + c.tLow) > 0 && c.tHigh > 0) {
+      float duty = (c.tHigh * 100.0) / (c.tHigh + c.tLow);
+
+      imprimirResultados(c.nombre, frecuencia, periodo, duty);
+    }
+  }
+}
+
+c.estado = lectura;
+
+
+}
+}
+
+void imprimirResultados(const char* nombre, float frecuencia, unsigned long periodo, float duty) {
+Serial.print(nombre);
+Serial.print(" -> F: ");
+Serial.print(frecuencia);
+Serial.print(" Hz | T: ");
+Serial.print(periodo);
+Serial.print(" ms | Duty: ");
+Serial.print(duty);
+Serial.println(" %");
+}
